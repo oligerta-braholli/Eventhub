@@ -9,14 +9,17 @@ export function authenticate(
   next: NextFunction
 ): void {
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
-    return next(new UnauthorizedError('No token provided'));
+  if (!authHeader) {
+    return next(new UnauthorizedError('Autentisering krävs'));
+  }
+  if (!authHeader.startsWith('Bearer ')) {
+    return next(new UnauthorizedError('Felaktigt autentiseringsformat'));
   }
   const token = authHeader.slice(7);
   try {
     req.user = verifyToken(token);
     next();
   } catch {
-    next(new UnauthorizedError('Invalid or expired token'));
+    next(new UnauthorizedError('Ogiltig eller utgången token'));
   }
 }

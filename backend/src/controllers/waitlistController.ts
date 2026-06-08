@@ -13,7 +13,9 @@ export async function joinWaitlist(
     const event = await Event.findById(req.params.eventId);
     if (!event || event.status !== 'published') return next(new NotFoundError('Event'));
 
-    if (event.bookedCount < event.capacity) {
+    const quantity = Number(req.body.quantity) || 1;
+    const availableSpots = event.capacity - event.bookedCount;
+    if (availableSpots >= quantity) {
       return next(new BadRequestError('Event still has available spots — book directly'));
     }
 
@@ -28,6 +30,7 @@ export async function joinWaitlist(
       event: req.params.eventId,
       participant: req.user!.userId,
       position,
+      quantity,
     });
     res.status(201).json({ status: 'success', data: { entry } });
   } catch (err) {
@@ -54,6 +57,24 @@ export async function leaveWaitlist(
     );
 
     res.json({ status: 'success', message: 'Removed from waitlist' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getMyWaitlist(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const entries = await Waitlist.find({
+      participant: req.user!.userId,
+      isAnonymized: false,
+    })
+      .populate('event', 'title startDate status')
+      .sort({ createdAt: 1 });
+    res.json({ status: 'success', data: { entries } });
   } catch (err) {
     next(err);
   }

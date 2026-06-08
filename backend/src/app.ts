@@ -14,6 +14,7 @@ import bookingRoutes from './routes/bookings';
 import reviewRoutes from './routes/reviews';
 import waitlistRoutes from './routes/waitlist';
 import gdprRoutes from './routes/gdpr';
+import adminRoutes from './routes/admin';
 
 const app = express();
 
@@ -37,6 +38,7 @@ app.use('/api/bookings', bookingRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/waitlist', waitlistRoutes);
 app.use('/api/gdpr', gdprRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Health check
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));

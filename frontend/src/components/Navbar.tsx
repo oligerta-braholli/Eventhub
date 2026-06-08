@@ -16,15 +16,19 @@ export default function Navbar() {
         <NavLink to="/" className="navbar-logo">EventHub</NavLink>
         <div className="navbar-links">
           <NavLink to="/events">Events</NavLink>
+          <NavLink to="/calendar">Kalender</NavLink>
           {user ? (
             <>
               <NavLink to="/my-bookings">Mina bokningar</NavLink>
               {(user.role === 'organizer' || user.role === 'admin') && (
                 <NavLink to="/create-event">Skapa event</NavLink>
               )}
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+              {user.role === 'admin' && (
+                <NavLink to="/admin">Admin</NavLink>
+              )}
+              <NavLink to="/profile" style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                 {user.name} ({user.role})
-              </span>
+              </NavLink>
               <button className="btn btn-secondary btn-sm" onClick={handleLogout}>
                 Logga ut
               </button>
@@ -32,7 +36,7 @@ export default function Navbar() {
           ) : (
             <>
               <NavLink to="/login">Logga in</NavLink>
-              <NavLink to="/register" className="btn btn-primary btn-sm">Registrera</NavLink>
+              <NavLink to="/register">Skapa konto</NavLink>
             </>
           )}
         </div>

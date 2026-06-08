@@ -1,13 +1,15 @@
 import { Router } from 'express';
-import { listVenues, createVenue, getVenue, venueValidation } from '../controllers/venueController';
+import { listVenues, createVenue, getVenue } from '../controllers/venueController';
 import { authenticate } from '../middleware/auth';
 import { authorize } from '../middleware/rbac';
-import { validate } from '../middleware/validate';
+import { validateBody, validateParams } from '../middleware/validate';
+import { idParamSchema } from '../schemas/common.schemas';
+import { createVenueSchema } from '../schemas/venue.schemas';
 
 const router = Router();
 
 router.get('/', listVenues);
-router.get('/:id', getVenue);
-router.post('/', authenticate, authorize('admin'), venueValidation, validate, createVenue);
+router.get('/:id', validateParams(idParamSchema), getVenue);
+router.post('/', authenticate, authorize('admin'), validateBody(createVenueSchema), createVenue);
 
 export default router;

@@ -76,6 +76,31 @@ export async function getEventReviews(
   }
 }
 
+export async function updateReview(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { rating, comment } = req.body as { rating: number; comment: string };
+    const review = await Review.findById(req.params.id);
+    if (!review) return next(new NotFoundError('Review'));
+
+    if (review.author.toString() !== req.user!.userId) {
+      return next(new ForbiddenError('Du kan bara redigera dina egna recensioner'));
+    }
+
+    review.rating = rating;
+    review.comment = comment;
+    await review.save();
+
+    const populated = await review.populate('author', 'name');
+    res.json({ status: 'success', data: { review: populated } });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function deleteReview(
   req: AuthenticatedRequest,
   res: Response,

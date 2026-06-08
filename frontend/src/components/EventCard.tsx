@@ -18,7 +18,11 @@ function formatDate(iso: string) {
 function StatusBadge({ event }: { event: Event }) {
   if (event.status === 'cancelled') return <span className="badge badge-red">Inställt</span>;
   if (event.status === 'completed') return <span className="badge badge-gray">Genomfört</span>;
-  if (event.isFull) return <span className="badge badge-yellow">Fullbokat</span>;
+
+  const ticketTypesAvailable = event.ticketTypes.some((t) => t.sold < t.quantity);
+  const isSoldOut = event.availableSpots <= 0 || !ticketTypesAvailable;
+
+  if (isSoldOut) return <span className="badge badge-yellow">Fullbokat</span>;
   return <span className="badge badge-green">Platser kvar: {event.availableSpots}</span>;
 }
 

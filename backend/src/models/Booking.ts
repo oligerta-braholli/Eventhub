@@ -25,7 +25,7 @@ const bookingSchema = new Schema<IBooking>(
   { timestamps: true }
 );
 
-bookingSchema.index({ event: 1, participant: 1 });
+bookingSchema.index({ event: 1, participant: 1 }, { unique: true });
 bookingSchema.index({ participant: 1 });
 
 bookingSchema.set('toJSON', { transform: (_doc, ret) => { const { __v, ...clean } = ret as any; return clean; } });

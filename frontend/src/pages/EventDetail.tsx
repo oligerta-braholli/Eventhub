@@ -14,7 +14,7 @@ function formatDate(iso: string) {
 
 export default function EventDetail() {
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   const [event, setEvent] = useState<Event | null>(null);
@@ -26,25 +26,63 @@ export default function EventDetail() {
   const [quantity, setQuantity] = useState(1);
   const [bookingMsg, setBookingMsg] = useState('');
   const [bookingLoading, setBookingLoading] = useState(false);
+  const [alreadyBooked, setAlreadyBooked] = useState(false);
+  const [justBooked, setJustBooked] = useState(false);
+  const [waitlistPosition, setWaitlistPosition] = useState<number | null>(null);
+  const [waitlistQuantity, setWaitlistQuantity] = useState<number>(1);
 
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [reviewMsg, setReviewMsg] = useState('');
+  const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
+  const [editRating, setEditRating] = useState(5);
+  const [editComment, setEditComment] = useState('');
+
+  const [statusMsg, setStatusMsg] = useState('');
+  const [statusLoading, setStatusLoading] = useState(false);
 
   useEffect(() => {
-    Promise.all([
+    if (authLoading) return;
+    let cancelled = false;
+    setAlreadyBooked(false);
+    setBookingMsg('');
+    setLoading(true);
+
+    const requests: Promise<any>[] = [
       api.get(`/events/${id}`),
       api.get(`/reviews/event/${id}`),
-    ]).then(([eRes, rRes]) => {
+    ];
+    if (user?.role === 'participant') {
+      requests.push(api.get('/bookings/my'));
+      requests.push(api.get('/waitlist/my'));
+    }
+
+    Promise.all(requests).then(([eRes, rRes, bRes, wRes]) => {
+      if (cancelled) return;
       setEvent(eRes.data.data.event);
       setReviews(rRes.data.data.reviews);
       setAvgRating(rRes.data.data.avgRating);
       if (eRes.data.data.event.ticketTypes.length > 0) {
         setSelectedTicket(eRes.data.data.event.ticketTypes[0].name);
       }
-    }).catch(console.error)
-      .finally(() => setLoading(false));
-  }, [id]);
+      if (bRes) {
+        const hasBooking = bRes.data.data.bookings.some(
+          (b: any) => (String(b.event?._id) === id || String(b.event?.id) === id) && b.status === 'confirmed'
+        );
+        setAlreadyBooked(hasBooking);
+      }
+      if (wRes) {
+        const myEntry = wRes.data.data.entries.find(
+          (e: any) => String(e.event?._id) === id || String(e.event?.id) === id
+        );
+        setWaitlistPosition(myEntry ? myEntry.position : null);
+        setWaitlistQuantity(myEntry ? myEntry.quantity : 1);
+      }
+    }).catch((err) => { if (!cancelled) console.error(err); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [id, user, authLoading]);
 
   async function handleBook() {
     if (!user) { navigate('/login'); return; }
@@ -52,11 +90,19 @@ export default function EventDetail() {
     setBookingMsg('');
     try {
       await api.post('/bookings', { eventId: id, ticketTypeName: selectedTicket, quantity });
-      setBookingMsg('Bokning bekräftad!');
+      setAlreadyBooked(true);
+      setJustBooked(true);
+      setBookingMsg(`Din bokning är bekräftad! Du har bokat ${quantity} ${quantity === 1 ? 'plats' : 'platser'} (${selectedTicket}).`);
       const r = await api.get(`/events/${id}`);
       setEvent(r.data.data.event);
     } catch (err: any) {
-      setBookingMsg(err.response?.data?.message ?? 'Bokningsfel');
+      const msg: string = err.response?.data?.message ?? 'Bokningsfel';
+      const responseStatus: string = err.response?.data?.status ?? '';
+      if (err.response?.status === 409 && responseStatus !== 'waitlisted' && msg.includes('redan')) {
+        setAlreadyBooked(true);
+      } else {
+        setBookingMsg(msg);
+      }
     } finally {
       setBookingLoading(false);
     }
@@ -65,10 +111,99 @@ export default function EventDetail() {
   async function handleJoinWaitlist() {
     if (!user) { navigate('/login'); return; }
     try {
-      await api.post(`/waitlist/${id}`);
-      setBookingMsg('Du är nu på väntelistan!');
+      const res = await api.post(`/waitlist/${id}`, { quantity });
+      setWaitlistPosition(res.data.data.entry.position);
+      setWaitlistQuantity(quantity);
+      setBookingMsg('');
     } catch (err: any) {
       setBookingMsg(err.response?.data?.message ?? 'Fel vid väntelisteregistrering');
+    }
+  }
+
+  async function handlePartialBookAndWaitlist() {
+    if (!user) { navigate('/login'); return; }
+    setBookingLoading(true);
+    setBookingMsg('');
+    const available = event!.availableSpots;
+    const waitlistQty = quantity - available;
+    try {
+      await api.post('/bookings', { eventId: id, ticketTypeName: selectedTicket, quantity: available });
+      const wRes = await api.post(`/waitlist/${id}`, { quantity: waitlistQty });
+      setAlreadyBooked(true);
+      setJustBooked(true);
+      setWaitlistPosition(wRes.data.data.entry.position);
+      setWaitlistQuantity(waitlistQty);
+      const r = await api.get(`/events/${id}`);
+      setEvent(r.data.data.event);
+    } catch (err: any) {
+      setBookingMsg(err.response?.data?.message ?? 'Fel');
+    } finally {
+      setBookingLoading(false);
+    }
+  }
+
+  async function handleLeaveWaitlist() {
+    try {
+      await api.delete(`/waitlist/${id}`);
+      setWaitlistPosition(null);
+      setBookingMsg('');
+    } catch (err: any) {
+      setBookingMsg(err.response?.data?.message ?? 'Kunde inte lämna väntelistan');
+    }
+  }
+
+  async function handleDelete() {
+    if (!window.confirm(`Är du säker på att du vill radera "${event?.title}"? Detta går inte att ångra.`)) return;
+    try {
+      await api.delete(`/events/${id}`);
+      navigate('/events');
+    } catch (err: any) {
+      setStatusMsg(err.response?.data?.message ?? 'Kunde inte radera eventet');
+    }
+  }
+
+  async function handleStatusChange(status: 'completed' | 'cancelled' | 'published') {
+    setStatusLoading(true);
+    setStatusMsg('');
+    try {
+      await api.patch(`/events/${id}/status`, { status });
+      const r = await api.get(`/events/${id}`);
+      setEvent(r.data.data.event);
+      setStatusMsg(
+        status === 'completed' ? 'Eventet markerat som genomfört.' :
+        status === 'cancelled' ? 'Eventet avbokat.' :
+        'Eventet återpublicerat.'
+      );
+    } catch (err: any) {
+      setStatusMsg(err.response?.data?.message ?? 'Kunde inte ändra status');
+    } finally {
+      setStatusLoading(false);
+    }
+  }
+
+  async function handleDeleteReview(reviewId: string) {
+    if (!window.confirm('Är du säker på att du vill radera recensionen?')) return;
+    try {
+      await api.delete(`/reviews/${reviewId}`);
+      setReviews((prev) => prev.filter((r) => r._id !== reviewId));
+    } catch (err: any) {
+      console.error(err);
+    }
+  }
+
+  async function handleUpdateReview(reviewId: string) {
+    try {
+      const res = await api.patch(`/reviews/${reviewId}`, { rating: editRating, comment: editComment });
+      const updated = res.data.data.review;
+      setReviews((prev) => {
+        const newReviews = prev.map((r) => r._id === reviewId ? updated : r);
+        const avg = newReviews.reduce((sum, r) => sum + r.rating, 0) / newReviews.length;
+        setAvgRating(avg);
+        return newReviews;
+      });
+      setEditingReviewId(null);
+    } catch (err: any) {
+      console.error(err);
     }
   }
 
@@ -91,6 +226,12 @@ export default function EventDetail() {
   if (!event) return <div className="spinner">Event hittades inte.</div>;
 
   const ticketType = event.ticketTypes.find((t) => t.name === selectedTicket);
+  const totalTicketTypeAvailable = event.ticketTypes.reduce(
+    (sum, t) => sum + Math.max(0, t.quantity - t.sold),
+    0
+  );
+  const eventHasSpots = event.availableSpots > 0;
+  const isSoldOut = !eventHasSpots || totalTicketTypeAvailable === 0;
 
   return (
     <div className="container" style={{ padding: '2rem 1.5rem' }}>
@@ -98,8 +239,8 @@ export default function EventDetail() {
         {/* Left */}
         <div>
           <div style={{ marginBottom: '1rem' }}>
-            {event.status === 'published' && !event.isFull && <span className="badge badge-green">Platser kvar: {event.availableSpots}</span>}
-            {event.isFull && <span className="badge badge-yellow">Fullbokat</span>}
+            {event.status === 'published' && !isSoldOut && <span className="badge badge-green">Platser kvar: {event.availableSpots}</span>}
+            {isSoldOut && <span className="badge badge-yellow">Fullbokat</span>}
             {event.status === 'completed' && <span className="badge badge-gray">Genomfört</span>}
             {event.status === 'cancelled' && <span className="badge badge-red">Inställt</span>}
           </div>
@@ -150,18 +291,57 @@ export default function EventDetail() {
             <p style={{ color: 'var(--text-muted)' }}>Inga recensioner ännu.</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {reviews.map((r) => (
-                <div key={r._id} className="card">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
-                    <strong>{r.author.name}</strong>
-                    <StarRating value={r.rating} readOnly />
+              {reviews.map((r) => {
+                const isAuthor = r.author._id === user?._id;
+                const isAdmin = user?.role === 'admin';
+                const isEditing = editingReviewId === r._id;
+
+                return (
+                  <div key={r._id} className="card">
+                    {isEditing ? (
+                      <>
+                        <StarRating value={editRating} onChange={(v) => setEditRating(v)} />
+                        <textarea
+                          rows={3}
+                          value={editComment}
+                          onChange={(e) => setEditComment(e.target.value)}
+                          maxLength={1000}
+                          style={{ width: '100%', marginTop: '0.5rem', padding: '0.5rem', border: '2px solid var(--border)', borderRadius: 8, fontFamily: 'inherit', fontSize: '0.9rem' }}
+                        />
+                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                          <button className="btn btn-primary btn-sm" onClick={() => handleUpdateReview(r._id)}>Spara</button>
+                          <button className="btn btn-secondary btn-sm" onClick={() => setEditingReviewId(null)}>Avbryt</button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                          <strong>{r.author.name}</strong>
+                          <StarRating value={r.rating} readOnly />
+                        </div>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{r.comment}</p>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem' }}>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                            {new Date(r.createdAt).toLocaleDateString('sv-SE')}
+                          </span>
+                          {(isAuthor || isAdmin) && (
+                            <div style={{ display: 'flex', gap: '0.4rem' }}>
+                              {isAuthor && (
+                                <button className="btn btn-secondary btn-sm" onClick={() => { setEditingReviewId(r._id); setEditRating(r.rating); setEditComment(r.comment); }}>
+                                  Redigera
+                                </button>
+                              )}
+                              <button className="btn btn-danger btn-sm" onClick={() => handleDeleteReview(r._id)}>
+                                Radera
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{r.comment}</p>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    {new Date(r.createdAt).toLocaleDateString('sv-SE')}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -194,14 +374,42 @@ export default function EventDetail() {
                   </div>
                 </div>
               )}
-              {bookingMsg && (
-                <div className={`alert ${bookingMsg.includes('bekräftad') || bookingMsg.includes('väntelista') ? 'alert-success' : 'alert-error'}`}>
+              {bookingMsg && !alreadyBooked && (
+                <div className={`alert ${bookingMsg.includes('väntelista') ? 'alert-success' : 'alert-error'}`}>
                   {bookingMsg}
                 </div>
               )}
-              {!event.isFull ? (
+              {alreadyBooked && waitlistPosition !== null ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <div className="alert alert-success" style={{ margin: 0 }}>
+                    {justBooked
+                      ? `✓ Bokade ${quantity - waitlistQuantity} platser! ${waitlistQuantity} platser läggs på väntelistan (plats ${waitlistPosition}).`
+                      : `Du har en bokning + väntelistan plats ${waitlistPosition} för ${waitlistQuantity} ${waitlistQuantity === 1 ? 'plats' : 'platser'}.`}
+                  </div>
+                  <button className="btn btn-danger" style={{ width: '100%', justifyContent: 'center' }} onClick={handleLeaveWaitlist}>
+                    Lämna väntelistan
+                  </button>
+                </div>
+              ) : alreadyBooked ? (
+                <div className="alert alert-success" style={{ textAlign: 'center' }}>
+                  {justBooked ? bookingMsg : 'Du har redan en bekräftad bokning för detta event.'}
+                </div>
+              ) : waitlistPosition !== null ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <div className="alert alert-success" style={{ textAlign: 'center', margin: 0 }}>
+                    Du är på väntelistan — plats {waitlistPosition} · {waitlistQuantity} {waitlistQuantity === 1 ? 'plats' : 'platser'} efterfrågad{waitlistQuantity === 1 ? '' : 'e'}
+                  </div>
+                  <button className="btn btn-danger" style={{ width: '100%', justifyContent: 'center' }} onClick={handleLeaveWaitlist}>
+                    Lämna väntelistan
+                  </button>
+                </div>
+              ) : !isSoldOut && event.availableSpots >= quantity ? (
                 <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={handleBook} disabled={bookingLoading}>
                   {bookingLoading ? 'Bokar...' : 'Boka nu'}
+                </button>
+              ) : !isSoldOut && event.availableSpots > 0 ? (
+                <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={handlePartialBookAndWaitlist} disabled={bookingLoading}>
+                  {bookingLoading ? 'Bokar...' : `Boka ${event.availableSpots} + väntelista för ${quantity - event.availableSpots}`}
                 </button>
               ) : (
                 <button className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }} onClick={handleJoinWaitlist}>
@@ -217,10 +425,95 @@ export default function EventDetail() {
           )}
 
           {event.status === 'cancelled' && (
-            <p style={{ color: 'var(--danger)', textAlign: 'center' }}>Detta event är inställt.</p>
+            <div>
+              <p style={{ color: 'var(--danger)', textAlign: 'center', marginBottom: '1rem' }}>Detta event är inställt.</p>
+              {(user?.role === 'organizer' || user?.role === 'admin') && (
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>Hantera event</p>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    style={{ width: '100%', justifyContent: 'center' }}
+                    onClick={() => handleStatusChange('published')}
+                    disabled={statusLoading}
+                  >
+                    Återpublicera event
+                  </button>
+                  {statusMsg && (
+                    <div className={`alert ${statusMsg.includes('markerat') || statusMsg.includes('avbokat') || statusMsg.includes('publicerat') ? 'alert-success' : 'alert-error'}`} style={{ marginTop: '0.75rem' }}>
+                      {statusMsg}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           )}
           {event.status === 'completed' && (
-            <p style={{ color: 'var(--text-muted)', textAlign: 'center' }}>Detta event har genomförts.</p>
+            <div>
+              <p style={{ color: 'var(--text-muted)', textAlign: 'center', marginBottom: '1rem' }}>Detta event har genomförts.</p>
+              {(user?.role === 'admin' || event.organizer._id === user?._id) && (
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>Hantera event</p>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    style={{ width: '100%', justifyContent: 'center' }}
+                    onClick={() => handleStatusChange('published')}
+                    disabled={statusLoading}
+                  >
+                    Återpublicera event
+                  </button>
+                  {statusMsg && (
+                    <div className={`alert ${statusMsg.includes('Kunde') || statusMsg.includes('denied') ? 'alert-error' : 'alert-success'}`} style={{ marginTop: '0.75rem' }}>
+                      {statusMsg}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {(user?.role === 'admin' || event.organizer._id === user?._id) && event.status === 'published' && (
+            <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>Hantera event</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {(user?.role === 'admin' || event.organizer._id === user?._id) && (
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    style={{ width: '100%', justifyContent: 'center' }}
+                    onClick={() => navigate(`/events/${id}/edit`)}
+                  >
+                    Redigera event
+                  </button>
+                )}
+                <button
+                  className="btn btn-secondary btn-sm"
+                  style={{ width: '100%', justifyContent: 'center' }}
+                  onClick={() => handleStatusChange('completed')}
+                  disabled={statusLoading}
+                >
+                  Markera som genomfört
+                </button>
+                <button
+                  className="btn btn-danger btn-sm"
+                  style={{ width: '100%', justifyContent: 'center' }}
+                  onClick={() => handleStatusChange('cancelled')}
+                  disabled={statusLoading}
+                >
+                  Avboka event
+                </button>
+                <button
+                  className="btn btn-danger btn-sm"
+                  style={{ width: '100%', justifyContent: 'center', background: '#7f1d1d' }}
+                  onClick={handleDelete}
+                >
+                  Radera event permanent
+                </button>
+              </div>
+              {statusMsg && (
+                <div className={`alert ${statusMsg.includes('Kunde') || statusMsg.includes('denied') ? 'alert-error' : 'alert-success'}`} style={{ marginTop: '0.75rem' }}>
+                  {statusMsg}
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>

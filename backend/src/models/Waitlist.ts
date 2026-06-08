@@ -4,6 +4,7 @@ export interface IWaitlist extends Document {
   event: Types.ObjectId;
   participant: Types.ObjectId;
   position: number;
+  quantity: number;
   isAnonymized: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -14,6 +15,7 @@ const waitlistSchema = new Schema<IWaitlist>(
     event: { type: Schema.Types.ObjectId, ref: 'Event', required: true },
     participant: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     position: { type: Number, required: true, min: 1 },
+    quantity: { type: Number, required: true, min: 1, max: 10, default: 1 },
     isAnonymized: { type: Boolean, default: false },
   },
   { timestamps: true }

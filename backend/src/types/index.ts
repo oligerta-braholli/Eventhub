@@ -28,6 +28,8 @@ export interface EventFilterQuery extends PaginationQuery {
   to?: string;
   venue?: string;
   search?: string;
+  status?: string;
+  sort?: string;
 }
 
 export interface BookingStatus {

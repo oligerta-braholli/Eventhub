@@ -37,7 +37,7 @@ export async function exportUserData(userId: string) {
   const uid = new Types.ObjectId(userId);
   const [user, bookings, reviews, waitlists] = await Promise.all([
     User.findById(uid).select('-password'),
-    Booking.find({ participant: uid }).populate('event', 'title startDate'),
+    Booking.find({ participant: uid }).populate('event', 'title startDate status'),
     Review.find({ author: uid }).populate('event', 'title'),
     Waitlist.find({ participant: uid }).populate('event', 'title'),
   ]);

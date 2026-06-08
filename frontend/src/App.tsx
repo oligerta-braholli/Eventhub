@@ -8,6 +8,10 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import MyBookings from './pages/MyBookings';
 import CreateEvent from './pages/CreateEvent';
+import Profile from './pages/Profile';
+import Calendar from './pages/Calendar';
+import AdminDashboard from './pages/AdminDashboard';
+import EditEvent from './pages/EditEvent';
 import { ReactNode } from 'react';
 
 function RequireAuth({ children, roles }: { children: ReactNode; roles?: string[] }) {
@@ -27,6 +31,23 @@ function AppRoutes() {
           <Route path="/" element={<Home />} />
           <Route path="/events" element={<Events />} />
           <Route path="/events/:id" element={<EventDetail />} />
+          <Route path="/calendar" element={<Calendar />} />
+          <Route
+            path="/events/:id/edit"
+            element={
+              <RequireAuth roles={['organizer', 'admin']}>
+                <EditEvent />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <RequireAuth roles={['admin']}>
+                <AdminDashboard />
+              </RequireAuth>
+            }
+          />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route
@@ -42,6 +63,14 @@ function AppRoutes() {
             element={
               <RequireAuth roles={['organizer', 'admin']}>
                 <CreateEvent />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <RequireAuth>
+                <Profile />
               </RequireAuth>
             }
           />

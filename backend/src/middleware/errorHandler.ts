@@ -18,9 +18,14 @@ export function errorHandler(
 
   // Mongoose duplicate key
   if ((err as any).code === 11000) {
+    const field = Object.keys((err as any).keyValue ?? {})[0];
+    const message =
+      field === 'email'
+        ? 'En användare med denna e-post finns redan'
+        : 'Du har redan en bokning för detta evenemang';
     res.status(409).json({
       status: 'error',
-      message: 'A record with that value already exists',
+      message,
     });
     return;
   }
@@ -29,18 +34,17 @@ export function errorHandler(
   if (err.name === 'ValidationError') {
     res.status(400).json({
       status: 'error',
-      message: 'Validation error',
+      message: 'Valideringsfel',
     });
     return;
   }
 
-  // Never leak stack traces to clients
   if (config.nodeEnv === 'development') {
     console.error(err);
   }
 
   res.status(500).json({
     status: 'error',
-    message: 'Internal server error',
+    message: 'Internt serverfel',
   });
 }

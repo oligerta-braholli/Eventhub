@@ -1,6 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { body, query } from 'express-validator';
 import { Event } from '../models/Event';
+import { Booking } from '../models/Booking';
 import { AuthenticatedRequest, EventFilterQuery } from '../types';
 import { NotFoundError, ForbiddenError, BadRequestError } from '../utils/errors';
 import { anonymizeEventParticipants } from '../utils/gdpr';
@@ -26,10 +27,12 @@ export async function listEvents(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { from, to, venue, search, page = '1', limit = '20' } =
+    const { from, to, venue, search, page = '1', limit = '20', status } =
       req.query as EventFilterQuery;
 
-    const filter: Record<string, unknown> = { status: 'published' };
+    const filter: Record<string, unknown> = status
+      ? { status }
+      : { status: { $in: ['published', 'completed'] } };
 
     if (from || to) {
       filter.startDate = {};
@@ -132,8 +135,8 @@ export const statusValidation = [
 const validTransitions: Record<string, string[]> = {
   draft: ['published', 'cancelled'],
   published: ['cancelled', 'completed'],
-  cancelled: [],
-  completed: [],
+  cancelled: ['published'],
+  completed: ['published'],
 };
 
 export async function changeEventStatus(
@@ -156,6 +159,18 @@ export async function changeEventStatus(
     }
 
     event.status = status as 'published' | 'cancelled' | 'completed';
+
+    if (status === 'cancelled') {
+      await Booking.updateMany(
+        { event: event._id, status: 'confirmed' },
+        { $set: { status: 'cancelled' } }
+      );
+      await Event.updateOne(
+        { _id: event._id },
+        { $set: { bookedCount: 0, 'ticketTypes.$[].sold': 0 } }
+      );
+    }
+
     await event.save();
 
     if (status === 'completed') {
@@ -174,9 +189,80 @@ export async function deleteEvent(
   next: NextFunction
 ): Promise<void> {
   try {
-    const event = await Event.findByIdAndDelete(req.params.id);
+    const event = await Event.findById(req.params.id);
     if (!event) return next(new NotFoundError('Event'));
+
+    const isOwner = event.organizer.toString() === req.user!.userId;
+    if (!isOwner && req.user!.role !== 'admin') {
+      return next(new ForbiddenError('Du kan bara radera dina egna events'));
+    }
+
+    await event.deleteOne();
     res.json({ status: 'success', message: 'Event deleted' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getCalendarEvents(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { from, to } = req.query as { from: string; to: string };
+
+    const events = await Event.find({
+      status: { $in: ['published', 'completed'] },
+      startDate: { $gte: new Date(from), $lte: new Date(to) },
+    })
+      .populate('venue', 'name address city')
+      .populate('organizer', 'name')
+      .sort({ startDate: 1 });
+
+    const grouped: Record<string, typeof events> = {};
+    for (const event of events) {
+      const dateKey = new Date(event.startDate).toISOString().slice(0, 10);
+      if (!grouped[dateKey]) grouped[dateKey] = [];
+      grouped[dateKey].push(event);
+    }
+
+    const days = Object.entries(grouped).map(([date, dayEvents]) => ({
+      date,
+      events: dayEvents,
+    }));
+
+    res.json({ status: 'success', data: { from, to, total: events.length, days } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function recalculateEventCounts(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const event = await Event.findById(req.params.id);
+    if (!event) return next(new NotFoundError('Event'));
+
+    const isOwner = event.organizer.toString() === req.user!.userId;
+    if (!isOwner && req.user!.role !== 'admin') {
+      return next(new ForbiddenError('Access denied'));
+    }
+
+    const confirmedBookings = await Booking.find({ event: event._id, status: 'confirmed' });
+
+    event.bookedCount = confirmedBookings.reduce((sum, b) => sum + b.quantity, 0);
+    for (const ticketType of event.ticketTypes) {
+      ticketType.sold = confirmedBookings
+        .filter((b) => b.ticketTypeName === ticketType.name)
+        .reduce((sum, b) => sum + b.quantity, 0);
+    }
+
+    await event.save();
+    res.json({ status: 'success', data: { event } });
   } catch (err) {
     next(err);
   }

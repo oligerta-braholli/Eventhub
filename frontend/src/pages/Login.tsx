@@ -18,7 +18,7 @@ export default function Login() {
       await login(email, password);
       navigate('/events');
     } catch (err: any) {
-      setError(err.response?.data?.message ?? 'Inloggning misslyckades');
+      setError(err.response?.data?.message ?? 'Felaktig e-post eller lösenord');
     } finally {
       setLoading(false);
     }

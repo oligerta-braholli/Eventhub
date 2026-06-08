@@ -8,7 +8,7 @@ function requireEnv(key: string): string {
 }
 
 export const config = {
-  nodeEnv: process.env.NODE_ENV ?? 'development',
+  nodeEnv: process.env.NODE_ENV ?? 'production',
   port: parseInt(process.env.PORT ?? '5000', 10),
   mongoUri: requireEnv('MONGODB_URI'),
   jwtSecret: requireEnv('JWT_SECRET'),
