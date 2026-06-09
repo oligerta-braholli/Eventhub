@@ -258,7 +258,4 @@ Vi loggar **aldrig**: lösenord, e-postadresser, request body, Authorization-hea
  
 ---
 
-## Författare
-
-Oligerta Braholli — Chas Academy  
 Kurs: Backendutveckling i Node.js, databaser och säkerhet
