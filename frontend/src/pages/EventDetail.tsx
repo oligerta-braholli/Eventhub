@@ -40,6 +40,9 @@ export default function EventDetail() {
 
   const [statusMsg, setStatusMsg] = useState('');
   const [statusLoading, setStatusLoading] = useState(false);
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [cardData, setCardData] = useState({ number: '', name: '', expiry: '', cvc: '' });
+  const [cardError, setCardError] = useState('');
 
   useEffect(() => {
     if (authLoading) return;
@@ -92,6 +95,8 @@ export default function EventDetail() {
       await api.post('/bookings', { eventId: id, ticketTypeName: selectedTicket, quantity });
       setAlreadyBooked(true);
       setJustBooked(true);
+      setShowPaymentForm(false);
+      setCardData({ number: '', name: '', expiry: '', cvc: '' });
       setBookingMsg(`Din bokning är bekräftad! Du har bokat ${quantity} ${quantity === 1 ? 'plats' : 'platser'} (${selectedTicket}).`);
       const r = await api.get(`/events/${id}`);
       setEvent(r.data.data.event);
@@ -372,6 +377,69 @@ export default function EventDetail() {
                     <span>Totalt</span>
                     <strong>{ticketType.price === 0 ? 'Gratis' : `${ticketType.price * quantity} kr`}</strong>
                   </div>
+                  {ticketType.price > 0 && showPaymentForm && (
+                    <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                        <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>💳 Kortuppgifter</span>
+                        <button type="button" onClick={() => { setShowPaymentForm(false); setCardError(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Avbryt</button>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                        <div>
+                          <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>Kortnummer</label>
+                          <input
+                            placeholder="1234 5678 9012 3456"
+                            maxLength={19}
+                            value={cardData.number}
+                            onChange={(e) => {
+                              const v = e.target.value.replace(/\D/g, '').slice(0, 16);
+                              const formatted = v.replace(/(.{4})/g, '$1 ').trim();
+                              setCardData((p) => ({ ...p, number: formatted }));
+                            }}
+                            style={{ padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>Kortinnehavarens namn</label>
+                          <input
+                            placeholder=""
+                            value={cardData.name}
+                            onChange={(e) => setCardData((p) => ({ ...p, name: e.target.value }))}
+                            style={{ padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' }}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <div style={{ flex: 1 }}>
+                            <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>Giltig till</label>
+                            <input
+                              placeholder="MM/ÅÅ"
+                              maxLength={5}
+                              value={cardData.expiry}
+                              onChange={(e) => {
+                                const v = e.target.value.replace(/\D/g, '').slice(0, 4);
+                                const formatted = v.length > 2 ? `${v.slice(0, 2)}/${v.slice(2)}` : v;
+                                setCardData((p) => ({ ...p, expiry: formatted }));
+                              }}
+                              style={{ padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' }}
+                            />
+                          </div>
+                          <div style={{ width: '80px' }}>
+                            <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>CVC</label>
+                            <input
+                              placeholder="123"
+                              maxLength={3}
+                              value={cardData.cvc}
+                              onChange={(e) => setCardData((p) => ({ ...p, cvc: e.target.value.replace(/\D/g, '').slice(0, 3) }))}
+                              style={{ padding: '0.5rem', borderRadius: 6, border: '1px solid var(--border)', fontSize: '0.9rem', width: '100%', boxSizing: 'border-box' }}
+                            />
+                          </div>
+                        </div>
+                        {cardError && <div style={{ color: 'red', fontSize: '0.85rem' }}>{cardError}</div>}
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                          🔒 Säker betalning
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               {bookingMsg && !alreadyBooked && (
@@ -404,9 +472,26 @@ export default function EventDetail() {
                   </button>
                 </div>
               ) : !isSoldOut && event.availableSpots >= quantity ? (
-                <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={handleBook} disabled={bookingLoading}>
-                  {bookingLoading ? 'Bokar...' : 'Boka nu'}
-                </button>
+                !showPaymentForm && ticketType && ticketType.price > 0 ? (
+                  <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => setShowPaymentForm(true)}>
+                    Boka nu
+                  </button>
+                ) : showPaymentForm && ticketType && ticketType.price > 0 ? (
+                  <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => {
+                    if (!cardData.number || !cardData.name || !cardData.expiry || !cardData.cvc) {
+                      setCardError('Fyll i alla kortuppgifter.');
+                      return;
+                    }
+                    setCardError('');
+                    handleBook();
+                  }} disabled={bookingLoading}>
+                    {bookingLoading ? 'Bearbetar...' : `Betala ${ticketType.price * quantity} kr`}
+                  </button>
+                ) : (
+                  <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={handleBook} disabled={bookingLoading}>
+                    {bookingLoading ? 'Bokar...' : 'Boka nu'}
+                  </button>
+                )
               ) : !isSoldOut && event.availableSpots > 0 ? (
                 <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={handlePartialBookAndWaitlist} disabled={bookingLoading}>
                   {bookingLoading ? 'Bokar...' : `Boka ${event.availableSpots} + väntelista för ${quantity - event.availableSpots}`}

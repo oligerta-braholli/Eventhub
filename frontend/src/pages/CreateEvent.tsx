@@ -104,11 +104,17 @@ export default function CreateEvent() {
             <label style={{ fontWeight: 600 }}>Biljetttyper</label>
             <button type="button" className="btn btn-secondary btn-sm" onClick={addTicketType}>+ Lägg till</button>
           </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px auto', gap: '0.5rem', marginBottom: '0.35rem' }}>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Namn</span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Pris (kr)</span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Antal</span>
+            <span />
+          </div>
           {ticketTypes.map((t, i) => (
             <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px auto', gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'center' }}>
-              <input placeholder="Namn (t.ex. Standard)" value={t.name} onChange={(e) => updateTicket(i, 'name', e.target.value)} required />
-              <input type="number" placeholder="Pris kr" min={0} value={t.price} onChange={(e) => updateTicket(i, 'price', parseInt(e.target.value, 10))} required />
-              <input type="number" placeholder="Antal" min={1} value={t.quantity} onChange={(e) => updateTicket(i, 'quantity', parseInt(e.target.value, 10))} required />
+              <input placeholder="t.ex. Standard" value={t.name} onChange={(e) => updateTicket(i, 'name', e.target.value)} required />
+              <input type="number" min={0} value={t.price} onChange={(e) => updateTicket(i, 'price', parseInt(e.target.value, 10))} required />
+              <input type="number" min={1} value={t.quantity} onChange={(e) => updateTicket(i, 'quantity', parseInt(e.target.value, 10))} required />
               <button type="button" className="btn btn-danger btn-sm" onClick={() => removeTicketType(i)}>✕</button>
             </div>
           ))}
