@@ -259,3 +259,4 @@ Vi loggar **aldrig**: lösenord, e-postadresser, request body, Authorization-hea
 ---
 
 Kurs: Backendutveckling i Node.js, databaser och säkerhet
+## Författare: Oligerta Braholli
