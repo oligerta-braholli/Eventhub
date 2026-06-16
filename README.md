@@ -2,6 +2,9 @@
 
 Ett fullstack-system för eventhantering med autentisering, rollbaserad åtkomstkontroll och GDPR-stöd. Byggt med Node.js, Express, MongoDB och React.
 
+## Live Demo
+https://eventhub-nine-eosin.vercel.app/
+
 ---
 
 ## Funktioner
