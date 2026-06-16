@@ -80,6 +80,9 @@ export default function MyBookings() {
       <div className="page-hero">
         <h1>Mina bokningar</h1>
         <p>{confirmed.length} bokningar totalt</p>
+        <button className="btn btn-secondary btn-sm" onClick={fetchAll} style={{ marginTop: '0.5rem' }}>
+          Uppdatera
+        </button>
       </div>
 
       {/* ── 1. Bekräftade ── */}

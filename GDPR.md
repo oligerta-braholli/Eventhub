@@ -1,10 +1,10 @@
 # GDPR-dokumentation – EventHub
 
-Det här dokumentet förklarar vilka personuppgifter EventHub sparar, varför vi sparar dem och hur användaren kan ta bort sina uppgifter.
+Det här dokumentet förklarar vilka personuppgifter EventHub sparar, varför jag sparar dem och hur användaren kan ta bort sina uppgifter.
 
 ---
 
-## Vilka personuppgifter sparar vi?
+## Vilka personuppgifter sparar jag?
 
 | Uppgift | Var sparas den? | Varför? |
 |---------|----------------|---------|
@@ -13,7 +13,7 @@ Det här dokumentet förklarar vilka personuppgifter EventHub sparar, varför vi
 | Lösenord | `users.password` | Autentisering – sparas **hashat** med bcrypt, aldrig i klartext |
 | Roll | `users.role` | Styr vad användaren får göra (deltagare, arrangör, admin) |
 
-Vi sparar **inte** mer information än vad som behövs.
+Jag sparar **inte** mer information än vad som behövs.
 
 ---
 
@@ -39,9 +39,9 @@ Användaren har rätt att:
 
 ---
 
-## Vad loggar vi?
+## Vad loggar jag?
 
-Vi loggar bara teknisk information som behövs för felsökning:
+Jag loggar bara teknisk information som behövs för felsökning:
 
 | Loggas | Loggas INTE |
 |--------|-------------|
@@ -54,7 +54,7 @@ Vi loggar bara teknisk information som behövs för felsökning:
 
 ## Säkerhet
 
-- Lösenord hashas med **bcrypt** (salt-faktor 12) – vi kan aldrig se ditt riktiga lösenord
+- Lösenord hashas med **bcrypt** (salt-faktor 12) – jag kan aldrig se ditt riktiga lösenord
 - All kommunikation sker via **HTTPS** i produktion
 - JWT-tokens används för autentisering och är tidsbegränsade (standard: 7 dagar)
 - Känsliga miljövariabler (databaslösenord, JWT-nyckel) lagras aldrig i koden
